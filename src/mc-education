@@ -301,7 +301,7 @@ install_apk() {
 
   # never suspend again: prevents the freeze/lxc-info breakage permanently
   adb -s "$dev" shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
-  adb -s "$dev" shell settings put secure stay_on_while_plugged_in 3 >/dev/null 2>&1 || true
+  adb -s "$dev" shell settings put global stay_on_while_plugged_in 3 >/dev/null 2>&1 || true
 
   out="$(adb -s "$dev" install-multiple -r "$APK_DIR"/*.apk 2>&1)"
   echo "$out" | grep -qi success || die "APK install failed: $out"
