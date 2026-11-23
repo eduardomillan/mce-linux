@@ -263,8 +263,11 @@ prepare_adb_key() {
 
   # some adb builds (e.g. Ubuntu's 1.0.41) only write the private key; derive the
   # Android-format pubkey from it when missing
-  if [ ! -f "$pub" ]; then
-    adb pubkey "$priv" > "$pub" 2>/dev/null || die "adb pubkey failed"
+  # write to a temp file and only keep a non-empty result, so a failed run can
+  # never leave an empty adbkey.pub that later runs would treat as valid
+  if [ ! -s "$pub" ]; then
+    adb pubkey "$priv" > "$pub.tmp" 2>/dev/null && [ -s "$pub.tmp" ] || { rm -f "$pub.tmp"; die "adb pubkey failed"; }
+    mv "$pub.tmp" "$pub"
   fi
 
   # the adb server presents keys from $HOME/.android/adbkey, so register ours there
