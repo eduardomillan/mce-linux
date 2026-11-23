@@ -23,9 +23,10 @@ RESET=0
 CHECK=0
 SHOW_HELP=0
 USE_SUDO=0
+XAPK_LOCAL=""   # set by --xapk; a local .xapk replaces the download
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --help|-h)           SHOW_HELP=1 ;;
     --check)             CHECK=1 ;;
     --reset)             RESET=1 ;;
@@ -33,7 +34,12 @@ for arg in "$@"; do
     --fullscreen)        MULTI_WINDOW=0 ;;
     --force-x11)         FORCE_X11=1 ;;
     --sudo)              USE_SUDO=1 ;;
+    --xapk)
+      [ $# -ge 2 ] || { echo "--xapk needs a file path" >&2; exit 1; }
+      XAPK_LOCAL="$2"; REPAIR=1; shift ;;
+    --xapk=*)            XAPK_LOCAL="${1#--xapk=}"; REPAIR=1 ;;
   esac
+  shift
 done
 
 log()   { echo "[$APP_NAME] $*"; }
@@ -72,6 +78,7 @@ Options:
   --fullscreen    run inside the fullscreen Android UI (default: own window)
   --force-x11     skip the Wayland check (Waydroid needs Wayland; try Weston)
   --sudo          use 'sudo' instead of 'pkexec' for admin steps
+  --xapk PATH     use a local .xapk instead of downloading it (implies --repair)
 
 First run: downloads Minecraft Education (~413 MB) + the Android image (~2 GB)
 and asks for your admin password twice (setup, then app install). Everything
@@ -131,29 +138,44 @@ run_check() {
 # ---------------------------------------------------------------------------
 # downloads
 # ---------------------------------------------------------------------------
-download_apk() {
-  [ "$REPAIR" = "0" ] && [ -f "$APK_DIR/.downloaded" ] && return 0
+download_failed() {
+  die "download failed (the source may block automated downloads, HTTP 403). Download the .xapk in a browser, then run: $(basename "$0") --xapk /path/to/file.xapk"
+}
 
+fetch_xapk() {
   notify "Downloading Minecraft Education (~413 MB)…"
   log "Downloading Minecraft Education from APKPure (~413 MB)..."
   rm -f "$XAPK"
 
   if command -v curl >/dev/null 2>&1; then
     if is_tty; then
-      curl -fL --progress-bar -A "$XAPK_UA" -e "https://apkpure.com/" "$XAPK_URL" -o "$XAPK" || die "download failed"
+      curl -fL --progress-bar -A "$XAPK_UA" -e "https://apkpure.com/" "$XAPK_URL" -o "$XAPK" || download_failed
     else
-      curl -fsSL -A "$XAPK_UA" -e "https://apkpure.com/" "$XAPK_URL" -o "$XAPK" || die "download failed"
+      curl -fsSL -A "$XAPK_UA" -e "https://apkpure.com/" "$XAPK_URL" -o "$XAPK" || download_failed
     fi
   elif command -v wget >/dev/null 2>&1; then
-    wget -q --user-agent="$XAPK_UA" -O "$XAPK" "$XAPK_URL" || die "download failed"
+    wget -q --user-agent="$XAPK_UA" -O "$XAPK" "$XAPK_URL" || download_failed
   else
-    python3 - "$XAPK" <<'PY' || die "download failed"
+    python3 - "$XAPK" <<'PY' || download_failed
 import sys, urllib.request
 req = urllib.request.Request(
     "https://d.apkpure.com/b/APK/com.mojang.minecraftedu?version=latest",
     headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/126.0"})
 open(sys.argv[1], "wb").write(urllib.request.urlopen(req).read())
 PY
+  fi
+
+}
+
+download_apk() {
+  [ "$REPAIR" = "0" ] && [ -f "$APK_DIR/.downloaded" ] && return 0
+
+  if [ -n "$XAPK_LOCAL" ]; then
+    [ -r "$XAPK_LOCAL" ] || die "--xapk file is not readable: $XAPK_LOCAL"
+    log "Using local XAPK: $XAPK_LOCAL"
+    [ "$XAPK_LOCAL" -ef "$XAPK" ] || cp "$XAPK_LOCAL" "$XAPK" || die "could not copy $XAPK_LOCAL"
+  else
+    fetch_xapk
   fi
 
   [ -s "$XAPK" ] || die "downloaded file is empty"

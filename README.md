@@ -162,6 +162,7 @@ Sign in inside the app with your Microsoft 365 Education account as usual.
 | `--fullscreen` | Run inside the fullscreen Android UI instead of a dedicated window. |
 | `--reset` | Delete **all** app data (`~/.local/share/mc-education`) and exit. |
 | `--sudo` | Use `sudo` instead of `pkexec` for the admin step (e.g., terminal-only environments). |
+| `--xapk PATH` | Use a local `.xapk` file instead of downloading it (useful when the download is blocked). Implies `--repair`. |
 | `--force-x11` | Skip the Wayland check (Waydroid requires Wayland; only use with Weston). |
 
 To fully shut down the background Android session after playing:
@@ -252,6 +253,7 @@ rm Minecraft-Education-Linux-x86_64.AppImage            # removes the launcher
 | **Slow launches (>1 min)** | This is the **cold-boot** path (no healthy session exists). Repeat launches should reuse the session in ~1 s. If every launch cold-boots, the session is dying between launches — check `session.log`. |
 | **On-screen keyboard pops up** | Inside Android (Waydroid shell → Settings → System → Languages & input → Physical keyboard), disable "Use on-screen keyboard". |
 | **Sign-in problems in-game** | Minecraft Education requires a valid **Microsoft 365 Education** account. |
+| **`download failed` (HTTP 403)** | APKPure's download endpoint is behind a Cloudflare challenge that blocks automated downloads (`curl`, `wget`, Python). Download the `.xapk` in a browser and run `./Minecraft-Education-Linux-x86_64.AppImage --xapk /path/to/file.xapk`. |
 | **Sluggish gameplay** | Games run best in fullscreen: `--fullscreen`. |
 
 ---
