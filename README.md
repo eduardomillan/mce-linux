@@ -162,7 +162,7 @@ Sign in inside the app with your Microsoft 365 Education account as usual.
 | `--fullscreen` | Run inside the fullscreen Android UI instead of a dedicated window. |
 | `--reset` | Delete **all** app data (`~/.local/share/mc-education`) and exit. |
 | `--sudo` | Use `sudo` instead of `pkexec` for the admin step (e.g., terminal-only environments). |
-| `--xapk PATH` | Use a local `.xapk` file instead of downloading it (useful when the download is blocked). Implies `--repair`. |
+| `--xapk PATH` | Use a local `.xapk` file instead of downloading it (useful when the download is blocked). Implies `--repair`. The bundle must include an **x86_64** split (`config.x86_64.apk`); an arm64-only bundle will not install (see Troubleshooting). |
 | `--force-x11` | Skip the Wayland check (Waydroid requires Wayland; only use with Weston). |
 
 To fully shut down the background Android session after playing:
@@ -253,6 +253,10 @@ rm Minecraft-Education-Linux-x86_64.AppImage            # removes the launcher
 | **Slow launches (>1 min)** | This is the **cold-boot** path (no healthy session exists). Repeat launches should reuse the session in ~1 s. If every launch cold-boots, the session is dying between launches — check `session.log`. |
 | **On-screen keyboard pops up** | Inside Android (Waydroid shell → Settings → System → Languages & input → Physical keyboard), disable "Use on-screen keyboard". |
 | **Sign-in problems in-game** | Minecraft Education requires a valid **Microsoft 365 Education** account. |
+| **`INSTALL_FAILED_NO_MATCHING_ABIS`** during install | The Waydroid Android image is **x86_64 only** and has no ARM translation. The game bundle must contain `config.x86_64.apk`. Bundles that only ship `config.arm64_v8a.apk` (e.g. some third-party mirrors) cannot be installed. Use a bundle with the x86_64 split, passed with `--xapk PATH`. |
+| **`INSTALL_FAILED_INVALID_APK ... version code inconsistent`** | APK parts from two different builds were mixed in `apk/`. The launcher now clears the old `*.apk` files before extracting a new package; if you still see this, run `--repair`. |
+| **Container `FROZEN`, `adb: device offline`, or `IP address: UNKNOWN`** | With **ufw** active, its default forward policy (`DEFAULT_FORWARD_POLICY="DROP"`) and input rules block the DHCP traffic from `waydroid0`, so the container never gets an IP. Allow the Waydroid interface: `sudo ufw allow in on waydroid0`, `sudo ufw route allow in on waydroid0`, `sudo ufw route allow out on waydroid0`, then `sudo waydroid container restart`. Check with `waydroid status`. |
+| **`adb: unauthorized` after the first boot** | After the first boot Android owns `misc/adb` in its data dir, so the launcher can no longer write `adb_keys` there (it logs a note and continues). Authorise the computer on the Android side instead: open the Waydroid window (`waydroid show-full-ui`) and tick **Always allow** in the *Allow USB debugging?* prompt. Once accepted, adb keeps working across relaunches. |
 | **`download failed` (HTTP 403)** | APKPure's download endpoint is behind a Cloudflare challenge that blocks automated downloads (`curl`, `wget`, Python). Download the `.xapk` in a browser and run `./Minecraft-Education-Linux-x86_64.AppImage --xapk /path/to/file.xapk`. |
 | **Sluggish gameplay** | Games run best in fullscreen: `--fullscreen`. |
 

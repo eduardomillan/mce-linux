@@ -191,6 +191,9 @@ for n in z.namelist():
     if n.lower().endswith(".apk"):
         z.extract(n, sys.argv[2])
 PY
+  # drop APKs left by a previous package (e.g. another source's splits) so
+  # install-multiple never mixes two builds
+  rm -f "$APK_DIR"/*.apk
   mv "$APK_DIR"/app/*.apk "$APK_DIR"/ 2>/dev/null
   rm -rf "$APK_DIR/app"
   ls "$APK_DIR"/*.apk >/dev/null 2>&1 || die "no APK found inside the downloaded package"
@@ -232,7 +235,12 @@ adb_ip() {
 
 # Host-side path of the Android /data dir (from the Waydroid config prop).
 android_data_dir() {
-  grep -m1 "^waydroid.host_data_path=" /var/lib/waydroid/waydroid.prop 2>/dev/null | cut -d= -f2
+  local d
+  d="$(grep -m1 "^waydroid.host_data_path=" /var/lib/waydroid/waydroid.prop 2>/dev/null | cut -d= -f2)"
+  # waydroid.prop is only generated when a session starts, so on a fresh
+  # install fall back to Waydroid's default user data dir (what it mounts as /data).
+  [ -n "$d" ] || d="$HOME/.local/share/waydroid/data"
+  printf '%s\n' "$d"
 }
 
 # The container's adb_keys file must contain the key in Android's proprietary
@@ -253,13 +261,22 @@ prepare_adb_key() {
     adb keygen "$priv" >/dev/null 2>&1 || die "adb keygen failed"
   fi
 
+  # some adb builds (e.g. Ubuntu's 1.0.41) only write the private key; derive the
+  # Android-format pubkey from it when missing
+  if [ ! -f "$pub" ]; then
+    adb pubkey "$priv" > "$pub" 2>/dev/null || die "adb pubkey failed"
+  fi
+
   # the adb server presents keys from $HOME/.android/adbkey, so register ours there
   cp "$priv" "$HOME/.android/adbkey" && chmod 600 "$HOME/.android/adbkey"
 
   # write the pubkey into Android's authorized-keys file (host side, before boot)
   mkdir -p "$data/misc/adb"
+  # Non-fatal: after the first boot Android owns misc/adb, so the host cannot
+  # write there. If adbd already trusts the key ("Always allow"), that is enough;
+  # install_apk reports a clear error otherwise.
   install -m 640 "$pub" "$data/misc/adb/adb_keys" 2>/dev/null || \
-    die "could not write the adb key into Android (is Waydroid initialized?)"
+    log "note: could not write adb_keys on the host (Android already owns it)"
   log "Android adb access configured."
 }
 
