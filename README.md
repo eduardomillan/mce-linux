@@ -49,7 +49,7 @@ The entire Android environment lives inside the app's own data directory, so the
 | Capability | Detail |
 |---|---|
 | **Single-file distribution** | One ~200 KB AppImage; the Android image (~2 GB) and game package (~413 MB) are fetched on first run only. |
-| **Fully isolated** | All Android data (image, user data, installed apps) lives under `~/.local/share/mc-education`; `/var/lib/waydroid` is redirected there via symlink. |
+| **Isolated per user** | The app's own files (APK copy, adb key, logs) live under `~/.local/share/mc-education`. The Waydroid installation and the Android image are system-wide. Each user's Android data (`/data`: accounts, installed apps, settings) lives in `~/.local/share/waydroid/data`. |
 | **No Google account required** | The game is installed with `adb install-multiple` — the same mechanism the Play Store uses — straight from the APK bundle. |
 | **Windowed or fullscreen** | Defaults to a dedicated game window; `--fullscreen` switches to the full Android UI. |
 | **Fast relaunch** | A healthy Android session is **reused** instead of rebooted: repeat launches complete in ~1 second (see [Session Lifecycle](#session-lifecycle--performance)). |
@@ -102,7 +102,7 @@ The entire Android environment lives inside the app's own data directory, so the
 | Requirement | Detail |
 |---|---|
 | **CPU / Arch** | x86_64 (AMD64) |
-| **OS** | Ubuntu 22.04+ / Debian 12+ (tested on Ubuntu 26.04) |
+| **OS** | Ubuntu 22.04+ / Debian 12+ (tested on Ubuntu 26.04, and on Ubuntu 22.04.5, which is Lliurex 23) |
 | **Display server** | **Wayland** (Ubuntu default). On X11, run inside [Weston](https://gitlab.freedesktop.org/wayland/weston) or pass `--force-x11` at your own risk. |
 | **Disk** | ~6 GB free (Android image ~2 GB + game ~1 GB + working space) |
 | **RAM** | ~4 GB |
@@ -196,16 +196,17 @@ launch ──► is Android already running AND answering over adb?
 
 ## Data Isolation & System Footprint
 
-Everything the app owns lives in one directory:
+The app's own files live in one directory:
 
 | Path | Contents |
 |---|---|
 | `~/.local/share/mc-education/apk/` | Downloaded game package + extracted APK parts + install state markers |
-| `~/.local/share/mc-education/waydroid/` | Android image, user data, installed apps |
+| `~/.local/share/mc-education/waydroid/` | Android image (via the `/var/lib/waydroid` symlink, see below) |
+| `~/.local/share/waydroid/data/` | Android user data (`/data`): accounts, installed apps, settings. One per user, managed by Waydroid |
 | `~/.local/share/mc-education/adbkey*` | adb keypair (Android-format) used for installs |
 | `~/.local/share/mc-education/logs/` | `setup.log`, `session.log`, `install.log` |
 
-`/var/lib/waydroid` is a **symlink** into `~/.local/share/mc-education/waydroid/`, so **deleting `~/.local/share/mc-education` removes everything Waydroid owns**.
+`/var/lib/waydroid` is a **symlink** into `~/.local/share/mc-education/waydroid/`, which holds the Android image. Android user data is **not** in that folder: it is in `~/.local/share/waydroid/data/`. `--reset` removes `~/.local/share/mc-education` but does not remove that user data.
 
 The only system-level changes (made by the one-time root setup, all reversible):
 
@@ -218,9 +219,12 @@ The only system-level changes (made by the one-time root setup, all reversible):
 **Uninstall (complete):**
 
 ```bash
-./Minecraft-Education-Linux-x86_64.AppImage --reset    # removes all app data
+./Minecraft-Education-Linux-x86_64.AppImage --reset    # removes the app data and the Android image
+rm -rf ~/.local/share/waydroid                           # removes Android user data (accounts, apps)
 rm Minecraft-Education-Linux-x86_64.AppImage            # removes the launcher
 ```
+
+The system-level parts (Waydroid package, service, binder module) are listed above and must be removed separately.
 
 ---
 
@@ -232,7 +236,7 @@ rm Minecraft-Education-Linux-x86_64.AppImage            # removes the launcher
 | **adb key handling** | A dedicated keypair is generated with `adb keygen` and stored in the app's private data dir (not your personal `~/.android`). The container only ever sees the public half, written with shell-readable permissions (mode `0640`, group `shell`) that adbd can actually read. |
 | **No Google account data** | Install happens via adb from the downloaded APK bundle — no Play Store login, no GSF registration on your host. |
 | **Network surface** | The app downloads from APKPure (game package) and `repo.waydro.id` / SourceForge (Waydroid + Android image) only. In-game sign-in talks to Microsoft's official services, as on any platform. |
-| **Isolation** | Android runs in an LXC container whose data root is confined to your home directory; removing it removes the entire Android environment. |
+| **Isolation** | Android runs in a system-wide LXC container. Its user data (`/data`) is confined to each user's home (`~/.local/share/waydroid/data`); removing that folder removes that user's Android environment. |
 | **Auditability** | Every setup step logs to `~/.local/share/mc-education/logs/`; `--check` reports exact environment state at any time. |
 
 ---
